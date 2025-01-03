@@ -1,47 +1,37 @@
-const {
-  makeWASocket,
-  useMultiFileAuthState,
-} = require("@whiskeysockets/baileys");
-const pino = require("pino");
+const express = require('express');
+const whatsapp = require('velixs-md');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 
-async function ConnectToWhatsApp(params) {
-  const authState = await useMultiFileAuthState("session");
-  const socket = await makeWASocket({
-    printQRInTerminal: true,
-    browser: ["ubuntu", "firefox", "10"],
-    auth: authState.state,
-    logger: pino(),
-  });
+const app = express();
+const port = 5000;
 
-  socket.ev.on("creds.update", authState.saveCreds);
-  socket.ev.on("connection.update", ({ connection, qr }) => {
-    if (connection == "open") {
-      console.log("koneksi aktif ...");
-    } else if (connection == "close") {
-      console.log("koneksi close ...");
-      ConnectToWhatsApp();
-    } else if (connection == "connecting") {
-      console.log("whatsaap sedang menghubungkan ...");
-    }
-  });
+app.use(bodyParser.json());  // to parse incoming JSON requests
+app.use(cors());
 
-  socket.ev.on("messages.upsert", async (m) => {
-    console.log(JSON.stringify(m));
+// Start a session
+const sessionName = 'nama_session';  // replace this with your session name
+whatsapp.startSession(sessionName);
 
-    console.log("replying to", m.messages[0].key.remoteJid);
-    if (!m.messages[0].key.fromMe) {
-      if (m.messages[0].message.conversation === "produk") {
-        await socket.sendMessage(m.messages[0].key.remoteJid, {
-          text: "ini adalah produk kita",
-        });
-      }
-      else{
-        await socket.sendMessage(m.messages[0].key.remoteJid, {
-            text: "Hallo semua",
-          });
-      }
-    }
-  });
-}
+// Webhook route to receive message and respond
+app.post('/send-message', async (req, res) => {
+  console.log({res,req})
+  const { orderId } = req.body;  // Extract `to` and `text` from the request body
+  
+  try {
+    await whatsapp.sendTextMessage({
+      sessionId: sessionName,
+      to: "+628114915666",
+      text: orderId,
+      isGroup: false  // Assuming single user message
+    });
+    
+    res.status(200).send({ status: 'success', message: 'Message sent' });
+  } catch (error) {
+    res.status(500).send({ status: 'error', message: error.message });
+  }
+});
 
-ConnectToWhatsApp();
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
+});
